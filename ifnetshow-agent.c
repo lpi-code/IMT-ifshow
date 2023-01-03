@@ -14,6 +14,8 @@
 #include <net/if_arp.h>
 #include <unistd.h>
 #include <sys/types.h>
+// Hashtable
+
 // Include error() function
 #define IFNETSHOW_PORT 5050
 
@@ -50,8 +52,17 @@ int netmask_to_cidr(struct sockaddr *netmask, int family)
 
 }
 
+bool is_str_in_list(char * str, char * list[], int list_len){
+    int i = 0;
+    printf("Checking %s ", str);
+    while (i < list_len && list[i] != NULL && !(strcmp(str, list[i]) == 0)){
+       i++;
+    }
+    return i < list_len && list[i] != NULL && (strcmp(str, list[i]) == 0);
+}
+
 char * get_ifname_info(char * ifname){
-    char * ifinfo = malloc(256);
+    char * ifinfo = malloc(2048);
     struct ifaddrs *ifaddr, *ifa;
     int family, s;
     char host[NI_MAXHOST];
@@ -74,13 +85,13 @@ char * get_ifname_info(char * ifname){
                     exit(EXIT_FAILURE);
                 }
                 if (!alreadyPrinted) {
-                    sprintf(ifinfo, "Interface : %s", ifa->ifa_name);
+                    sprintf(ifinfo, "Interface : %s\n", ifa->ifa_name);
                 } 
                 if (family == AF_INET) {
-                    sprintf(ifinfo, "\tIpV4%s/%d\n", host, netmask_to_cidr(ifa->ifa_netmask, family));
+                    sprintf(ifinfo, "%s\tIpV4 : %s/%d\n",ifinfo, host, netmask_to_cidr(ifa->ifa_netmask, family));
                     
                 } else {
-                    sprintf(ifinfo, "\tIpV6 : %s/%\n", host, netmask_to_cidr(ifa->ifa_netmask, family));
+                 sprintf(ifinfo, "%s\tIpV6 : %s/%d\n",ifinfo, host, netmask_to_cidr(ifa->ifa_netmask, family));
                 }
             alreadyPrinted = true;
             }
@@ -95,7 +106,7 @@ char * get_ifname_info(char * ifname){
 }
 
 char * get_all_ifinfo(){
-    char * ifinfo = malloc(256);
+    char * ifinfo = malloc(2048);
     struct ifaddrs *ifaddr, *ifa;
     int family, s;
     char host[NI_MAXHOST];
@@ -104,10 +115,13 @@ char * get_all_ifinfo(){
         exit(EXIT_FAILURE);
     }
     ifa = ifaddr;
-    bool alreadyPrinted = false;
-    while(ifa != NULL){
+    // Array of string
+    char * alreadyPrintedIf[100];
+    // Fill array with NULL
+    memset(alreadyPrintedIf, 0, 100);
+    int i = 0;
+    while(ifa != NULL && i < 100){
         family = ifa->ifa_addr->sa_family;
-        printf("Interface : %s\n", ifa->ifa_name);
         if (family == AF_INET || family == AF_INET6) {
             s = getnameinfo(ifa->ifa_addr,
                             (family == AF_INET) ? sizeof(struct sockaddr_in) :
@@ -117,7 +131,10 @@ char * get_all_ifinfo(){
                 printf("getnameinfo() failed: %s", gai_strerror(s));
                 exit(EXIT_FAILURE);
             }
-            sprintf(ifinfo, "%s", get_ifname_info(ifa->ifa_name));
+        if (!is_str_in_list(ifa->ifa_name, alreadyPrintedIf, i)){
+            sprintf(ifinfo, "%s%s\n",ifinfo, get_ifname_info(ifa->ifa_name));
+            alreadyPrintedIf[i++] = ifa->ifa_name;
+        }
         }
         ifa = ifa->ifa_next;
     }
@@ -127,53 +144,53 @@ char * get_all_ifinfo(){
 
 void server_listen_loop(){
     int sockfd, newsockfd, portno, clilen;
-    char buffer[256];
+    char buffer[2048];
     struct sockaddr_in serv_addr, cli_addr;
     int n;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
         error("ERROR opening socket");
-    bzero((char *) &serv_addr, sizeof(serv_addr));
     portno = IFNETSHOW_PORT;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
+    int opt = 1;
+    setsockopt(sockfd,SOL_SOCKET, SOL_SOCKET | SO_REUSEADDR, &opt, sizeof(opt));
     if (bind(sockfd, (struct sockaddr *) &serv_addr,
              sizeof(serv_addr)) < 0)
         error("ERROR on binding");
-    listen(sockfd,5);
+    listen(sockfd, 5);
     while (1) {
         clilen = sizeof(cli_addr);
         newsockfd = accept(sockfd,
                            (struct sockaddr *) &cli_addr,
                            &clilen);
+        
+        printf("New connection from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
         if (newsockfd < 0)
             error("ERROR on accept");
-        bzero(buffer,256);
-        n = read(newsockfd,buffer,255);
+        bzero(buffer,2048);
+        n = read(newsockfd,buffer,2048);
         if (n < 0) error("ERROR reading from socket");
-        printf("Here is the message: %s",buffer);
         // if buffer is empty, send all interfaces info
         // else send only the interface info
         char * ifinfo;
-        printf("Buffer length : %d", strlen(buffer));
-        if (strlen(buffer) == 0) {
-            printf("Sending all interfaces info");
+        if (strcmp(buffer, "\n")) {
             ifinfo = get_all_ifinfo();
         } else {
             ifinfo = get_ifname_info(buffer);
         }
-        n = write(newsockfd,ifinfo,strlen(ifinfo));
+        n = send(newsockfd, ifinfo, strlen(ifinfo), 0);
         if (n < 0) error("ERROR writing to socket");
         close(newsockfd);
     }
     close(sockfd);
+    shutdown(sockfd, SHUT_RDWR);
 }
 
 int main (int argc, char *argv[])
 {
     while (1) {
-        printf("Listening again\n");
         server_listen_loop();
     }
 }

@@ -23,7 +23,9 @@ char * get_ifname_by_addr(char * addr, char * ifname)
 {
     // Connect to addr on port IFNETSHOW_PORT
     // Establish connection
+    printf("Connecting to %s:%d\n", addr, IFNETSHOW_PORT);
     int connection_socket;
+
     connection_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (connection_socket == -1) {
         perror("socket");
@@ -37,22 +39,24 @@ char * get_ifname_by_addr(char * addr, char * ifname)
     server_address.sin_addr.s_addr = inet_addr(addr);
 
     // Connect to the server
+    printf("Connecting to %s:%d\n", addr, IFNETSHOW_PORT);
     int connection_status = connect(connection_socket, (struct sockaddr *) &server_address, sizeof(server_address));
     if (connection_status == -1) {
         perror("connect");
         exit(EXIT_FAILURE);
     }
     // Send ifname
-    send(connection_socket, ifname, strlen(ifname), 0);
+    printf("Sending ifname: %s\n", ifname);
+    write(connection_socket, ifname, strlen(ifname));
     // Receive ifname
-    char server_response[30000];
-    recv(connection_socket, &server_response, sizeof(server_response), 0);
-    printf("Server response: %s", server_response);
+    char server_response[2048];
+    read(connection_socket, &server_response, sizeof(server_response));
     // Print the server's response
     // Close the socket
     close(connection_socket);
     char * output = malloc(sizeof(server_response));
     strcpy(output, server_response);
+    close(connection_socket);
     return output;
 }
 
@@ -96,12 +100,12 @@ int main(int argc, char *argv[])
 
     if (ifname != NULL) {
         char * output = get_ifname_by_addr(addr, ifname);
-        printf("%s\n", output);
+        printf("%s", output);
     }
     if (all) {
         printf("All interfaces:\n");
-        char * output = get_ifname_by_addr(addr, "");
-        printf("%s\n", output);
+        char * output = get_ifname_by_addr(addr, "\n");
+        printf("%s", output);
     }
 
     return 0;
