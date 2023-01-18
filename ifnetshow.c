@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
     }
     if (all) {
         printf("All interfaces:\n");
-        char * output = get_ifname_by_addr(addr, "\n");
+        char * output = get_ifname_by_addr(addr, "_");
         printf("%s", output);
     }
 

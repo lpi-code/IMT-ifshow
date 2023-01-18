@@ -175,7 +175,8 @@ void server_listen_loop(){
         // if buffer is empty, send all interfaces info
         // else send only the interface info
         char * ifinfo;
-        if (strcmp(buffer, "\n")) {
+        // if starts with _ it's a command
+        if (buffer[0] == '_') {
             ifinfo = get_all_ifinfo();
         } else {
             ifinfo = get_ifname_info(buffer);
