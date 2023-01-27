@@ -122,10 +122,27 @@ int main (int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
         ifa = ifaddr;
+        char **ifnames = malloc(sizeof(char *));
+        int ifnamesCount = 0;
         while(ifa != NULL){
-            show_interface_addr(ifa->ifa_name);
-            ifa = ifa->ifa_next;
-            printf("\n");
+            
+            
+            bool alreadyInList = false;
+            for (int i = 0; i < ifnamesCount; i++) {
+                if (strcmp(ifnames[i], ifa->ifa_name) == 0) {
+                    alreadyInList = true;
+                    break;
+                }
+            }
+            if (!alreadyInList) {
+                ifnamesCount++;
+                ifnames = realloc(ifnames, ifnamesCount * sizeof(char *));
+                ifnames[ifnamesCount - 1] = ifa->ifa_name;
+                show_interface_addr(ifa->ifa_name);
+                ifa = ifa->ifa_next;
+                printf("\n");
+                // Check if interface already in list
+            }
         }
 
     } else if (strcmp(argv[1], "-h") == 0) {
